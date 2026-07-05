@@ -1,0 +1,8 @@
+{
+  "name": "Next.js Dev Container",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "web",
+  "workspaceFolder": "/app/my-next-app",
+  "forwardPorts": [3000],
+  "postCreateCommand": "npm install"
+}
