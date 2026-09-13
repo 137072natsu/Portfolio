@@ -2222,3 +2222,2005 @@ export default function Page() {
   );
 }
 ```
+
+## page.tsx 簡易
+```tsx
+'use client';
+
+import * as React from 'react';
+
+import { styled, alpha } from '@mui/material/styles';
+
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardMedia from '@mui/material/CardMedia';
+import Chip from '@mui/material/Chip';
+import Divider from '@mui/material/Divider';
+import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
+
+import ArticleIcon from '@mui/icons-material/Article';
+import ImageIcon from '@mui/icons-material/Image';
+import VideoCameraBackIcon from '@mui/icons-material/VideoCameraBack';
+import HistoryIcon from '@mui/icons-material/History';
+
+import { RichTreeView } from '@mui/x-tree-view/RichTreeView';
+
+import {
+  useTreeItem,
+  UseTreeItemParameters,
+} from '@mui/x-tree-view/useTreeItem';
+
+import {
+  TreeItemIconContainer,
+  TreeItemLabel,
+} from '@mui/x-tree-view/TreeItem';
+
+import { TreeItemIcon } from '@mui/x-tree-view/TreeItemIcon';
+import { TreeItemProvider } from '@mui/x-tree-view/TreeItemProvider';
+
+import { useTreeItemModel } from '@mui/x-tree-view/hooks';
+
+import Timeline from '@mui/lab/Timeline';
+import TimelineItem from '@mui/lab/TimelineItem';
+import TimelineSeparator from '@mui/lab/TimelineSeparator';
+import TimelineConnector from '@mui/lab/TimelineConnector';
+import TimelineDot from '@mui/lab/TimelineDot';
+import TimelineContent from '@mui/lab/TimelineContent';
+import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
+
+/* =========================================================
+   DBから取得するAssetデータ
+========================================================= */
+
+/*
+ * /api/assets から取得するデータ。
+ *
+ * DB:
+ *
+ * id
+ * name
+ * class
+ * game_path
+ * thumbnail_path
+ * revision
+ * commit_message
+ * created_at
+ */
+type AssetData = {
+  id: number;
+
+  name: string;
+
+  class: string;
+
+  game_path: string;
+
+  thumbnail_path: string | null;
+
+  revision: number;
+
+  commit_message: string | null;
+
+  created_at: string;
+};
+
+/* =========================================================
+   TreeView
+========================================================= */
+
+/*
+ * Assetの種類。
+ *
+ * TreeViewで表示するIconを決めるために使用する。
+ */
+type FileType =
+  | 'image'
+  | 'doc'
+  | 'video';
+
+/*
+ * RichTreeViewへ渡す1つのAsset。
+ *
+ * 今回はDirectoryを表示しないため、
+ * childrenは持たない。
+ */
+type ExtendedTreeItemProps = {
+  /*
+   * TreeView上で一意なID。
+   */
+  id: string;
+
+  /*
+   * 画面に表示するAsset名。
+   */
+  label: string;
+
+  /*
+   * AssetのIcon種類。
+   */
+  fileType?: FileType;
+
+  /*
+   * Unreal Engine側のgame_path。
+   */
+  gamePath: string;
+
+  /*
+   * Unreal Asset Class。
+   */
+  assetClass: string;
+};
+
+/* =========================================================
+   Asset Class → Icon Type
+========================================================= */
+
+/*
+ * Unreal Engine側のclassから、
+ * TreeViewで使用するIconを決定する。
+ *
+ * DBに入るclass名に合わせて、
+ * 後から条件を増やしてもよい。
+ */
+function getFileTypeFromAssetClass(
+  assetClass: string,
+): FileType {
+  /*
+   * 大文字・小文字の違いをなくす。
+   */
+  const className =
+    assetClass.toLowerCase();
+
+  /*
+   * Texture系。
+   */
+  if (
+    className.includes('texture') ||
+    className.includes('image')
+  ) {
+    return 'image';
+  }
+
+  /*
+   * Materialも画像系Iconで表示する。
+   */
+  if (
+    className.includes('material')
+  ) {
+    return 'image';
+  }
+
+  /*
+   * Media / Movie系。
+   */
+  if (
+    className.includes('video') ||
+    className.includes('media') ||
+    className.includes('movie')
+  ) {
+    return 'video';
+  }
+
+  /*
+   * Blueprint、
+   * StaticMesh、
+   * SkeletalMeshなど。
+   */
+  return 'doc';
+}
+
+/* =========================================================
+   最新Revisionだけ取得
+========================================================= */
+
+/*
+ * DBには、
+ *
+ * BP_Player revision 1
+ * BP_Player revision 2
+ * BP_Player revision 3
+ *
+ * のように同じAssetが複数行存在する。
+ *
+ * Asset一覧にはBP_Playerを1つだけ表示したいため、
+ * game_pathごとに最新Revisionだけ取り出す。
+ */
+function getLatestAssets(
+  assets: AssetData[],
+): AssetData[] {
+  /*
+   * key:
+   * game_path
+   *
+   * value:
+   * 最新RevisionのAsset。
+   */
+  const latestMap =
+    new Map<string, AssetData>();
+
+  /*
+   * 全Revisionを確認する。
+   */
+  for (const asset of assets) {
+    /*
+     * 同じgame_pathのAssetが
+     * 既に登録されているか確認。
+     */
+    const current =
+      latestMap.get(
+        asset.game_path,
+      );
+
+    /*
+     * 初めて見つかったAssetなら登録。
+     */
+    if (!current) {
+      latestMap.set(
+        asset.game_path,
+        asset,
+      );
+
+      continue;
+    }
+
+    /*
+     * より新しいRevisionなら
+     * 最新Assetとして置き換える。
+     */
+    if (
+      asset.revision >
+      current.revision
+    ) {
+      latestMap.set(
+        asset.game_path,
+        asset,
+      );
+    }
+  }
+
+  /*
+   * Map → Arrayへ変換。
+   *
+   * Asset名順に並べる。
+   */
+  return Array.from(
+    latestMap.values(),
+  ).sort((a, b) =>
+    a.name.localeCompare(
+      b.name,
+    ),
+  );
+}
+
+/* =========================================================
+   Asset → TreeViewデータ
+========================================================= */
+
+/*
+ * 最新RevisionのAsset一覧を、
+ * RichTreeViewへ渡せるデータへ変換する。
+ *
+ * Directoryは一切作らない。
+ *
+ * 表示例:
+ *
+ * BP_Player
+ * M_Player
+ * SK_Player
+ * T_Player
+ */
+function createTreeItems(
+  assets: AssetData[],
+): ExtendedTreeItemProps[] {
+  return assets.map(
+    (asset) => ({
+      /*
+       * game_pathはAssetごとに一意なので、
+       * TreeView IDとして使用する。
+       */
+      id:
+        `asset:${asset.game_path}`,
+
+      /*
+       * TreeView上に表示する名前。
+       */
+      label:
+        asset.name,
+
+      /*
+       * Asset種類に応じたIcon。
+       */
+      fileType:
+        getFileTypeFromAssetClass(
+          asset.class,
+        ),
+
+      /*
+       * Timeline履歴検索に使う。
+       */
+      gamePath:
+        asset.game_path,
+
+      /*
+       * Unreal Engine Asset Class。
+       */
+      assetClass:
+        asset.class,
+    }),
+  );
+}
+
+/* =========================================================
+   TreeView Style
+========================================================= */
+
+/*
+ * TreeItem全体。
+ */
+const TreeItemRoot =
+  styled('li')(
+    ({ theme }) => ({
+      listStyle: 'none',
+
+      margin: 0,
+
+      padding: 0,
+
+      outline: 0,
+
+      color:
+        theme.palette.grey[400],
+
+      /*
+       * Light Mode。
+       */
+      ...theme.applyStyles(
+        'light',
+        {
+          color:
+            theme.palette.grey[800],
+        },
+      ),
+    }),
+  );
+
+/*
+ * TreeViewのAsset1行分。
+ */
+const TreeItemContent =
+  styled('div')(
+    ({ theme }) => ({
+      padding:
+        theme.spacing(1),
+
+      width:
+        '100%',
+
+      boxSizing:
+        'border-box',
+
+      display:
+        'flex',
+
+      alignItems:
+        'center',
+
+      gap:
+        theme.spacing(1),
+
+      cursor:
+        'pointer',
+
+      borderRadius:
+        theme.spacing(0.7),
+
+      marginBottom:
+        theme.spacing(0.5),
+
+      fontWeight:
+        500,
+
+      /*
+       * 選択されたAsset。
+       */
+      '&[data-focused], &[data-selected]':
+        {
+          backgroundColor:
+            theme.palette
+              .primary.dark,
+
+          color:
+            theme.palette
+              .primary
+              .contrastText,
+
+          ...theme.applyStyles(
+            'light',
+            {
+              backgroundColor:
+                theme.palette
+                  .primary.main,
+            },
+          ),
+        },
+
+      /*
+       * Mouse Hover。
+       */
+      '&:not([data-focused], [data-selected]):hover':
+        {
+          backgroundColor:
+            alpha(
+              theme.palette
+                .primary.main,
+              0.1,
+            ),
+
+          ...theme.applyStyles(
+            'light',
+            {
+              color:
+                theme.palette
+                  .primary.main,
+            },
+          ),
+        },
+    }),
+  );
+
+/*
+ * TreeItemの文字。
+ */
+const TreeItemLabelText =
+  styled(Typography)({
+    color:
+      'inherit',
+
+    fontWeight:
+      500,
+  });
+
+/* =========================================================
+   TreeView Label
+========================================================= */
+
+interface CustomLabelProps {
+  /*
+   * Asset名。
+   */
+  children:
+    React.ReactNode;
+
+  /*
+   * Asset Icon。
+   */
+  icon?:
+    React.ElementType;
+}
+
+/*
+ * TreeViewの
+ *
+ * Icon + Asset名
+ *
+ * を表示する。
+ */
+function CustomLabel({
+  icon: Icon,
+  children,
+  ...other
+}: CustomLabelProps) {
+  return (
+    <TreeItemLabel
+      {...other}
+      sx={{
+        display:
+          'flex',
+
+        alignItems:
+          'center',
+
+        width:
+          '100%',
+      }}
+    >
+      {/* Asset Icon */}
+
+      {Icon && (
+        <Box
+          component={
+            Icon
+          }
+          sx={{
+            color:
+              'inherit',
+
+            mr: 1,
+
+            fontSize:
+              '1.2rem',
+          }}
+        />
+      )}
+
+      {/* Asset名 */}
+
+      <TreeItemLabelText
+        variant="body2"
+      >
+        {children}
+      </TreeItemLabelText>
+    </TreeItemLabel>
+  );
+}
+
+/* =========================================================
+   FileType → Icon
+========================================================= */
+
+/*
+ * FileTypeから実際のMUI Iconを取得する。
+ */
+function getIconFromFileType(
+  fileType: FileType,
+) {
+  switch (fileType) {
+    case 'image':
+      return ImageIcon;
+
+    case 'video':
+      return VideoCameraBackIcon;
+
+    case 'doc':
+    default:
+      return ArticleIcon;
+  }
+}
+
+/* =========================================================
+   CustomTreeItem
+========================================================= */
+
+interface CustomTreeItemProps
+  extends
+    Omit<
+      UseTreeItemParameters,
+      'rootRef'
+    >,
+    Omit<
+      React.HTMLAttributes<HTMLLIElement>,
+      'onFocus'
+    > {}
+
+/*
+ * MUI RichTreeViewのItemを
+ * Asset用にカスタマイズする。
+ *
+ * 今回Directoryは存在しないので、
+ * 全ItemがAssetになる。
+ */
+const CustomTreeItem =
+  React.forwardRef(
+    function CustomTreeItem(
+      props:
+        CustomTreeItemProps,
+
+      ref:
+        React.Ref<HTMLLIElement>,
+    ) {
+      const {
+        id,
+        itemId,
+        label,
+        disabled,
+        ...other
+      } =
+        props;
+
+      /*
+       * MUI TreeView内部で
+       * 必要なPropsを取得する。
+       */
+      const {
+        getContextProviderProps,
+        getRootProps,
+        getContentProps,
+        getIconContainerProps,
+        getLabelProps,
+        status,
+      } =
+        useTreeItem({
+          id,
+
+          itemId,
+
+          label,
+
+          disabled,
+
+          rootRef:
+            ref,
+        });
+
+      /*
+       * createTreeItems()で追加した
+       * fileTypeなどを取得する。
+       */
+      const item =
+        useTreeItemModel<
+          ExtendedTreeItemProps
+        >(
+          itemId,
+        )!;
+
+      /*
+       * Asset Classに対応するIcon。
+       */
+      const icon =
+        item.fileType
+          ? getIconFromFileType(
+              item.fileType,
+            )
+          : ArticleIcon;
+
+      return (
+        <TreeItemProvider
+          {...getContextProviderProps()}
+        >
+          <TreeItemRoot
+            {...getRootProps(
+              other,
+            )}
+          >
+            <TreeItemContent
+              {...getContentProps()}
+            >
+              {/* MUI標準のTreeItem Icon領域 */}
+
+              <TreeItemIconContainer
+                {...getIconContainerProps()}
+              >
+                <TreeItemIcon
+                  status={
+                    status
+                  }
+                />
+              </TreeItemIconContainer>
+
+              {/* Asset名 */}
+
+              <CustomLabel
+                {...getLabelProps({
+                  icon,
+                })}
+              />
+            </TreeItemContent>
+          </TreeItemRoot>
+        </TreeItemProvider>
+      );
+    },
+  );
+
+/* =========================================================
+   Thumbnail
+========================================================= */
+
+/*
+ * Asset Thumbnailを表示する。
+ *
+ * thumbnail_pathがnull、
+ * または画像取得失敗時は
+ * ImageIconを表示する。
+ */
+function AssetThumbnail({
+  src,
+  alt,
+}: {
+  src:
+    string | null;
+
+  alt:
+    string;
+}) {
+  /*
+   * 画像読み込み失敗フラグ。
+   */
+  const [
+    imageError,
+    setImageError,
+  ] =
+    React.useState(false);
+
+  /*
+   * Thumbnailが存在しない場合。
+   */
+  if (
+    !src ||
+    imageError
+  ) {
+    return (
+      <Box
+        sx={{
+          width:
+            140,
+
+          minWidth:
+            140,
+
+          height:
+            140,
+
+          display:
+            'flex',
+
+          alignItems:
+            'center',
+
+          justifyContent:
+            'center',
+
+          bgcolor:
+            'action.hover',
+        }}
+      >
+        <ImageIcon
+          sx={{
+            fontSize:
+              48,
+
+            color:
+              'text.secondary',
+          }}
+        />
+      </Box>
+    );
+  }
+
+  /*
+   * Thumbnailが存在する場合。
+   */
+  return (
+    <CardMedia
+      component="img"
+
+      image={
+        src
+      }
+
+      alt={
+        alt
+      }
+
+      /*
+       * 画像取得失敗時。
+       */
+      onError={() =>
+        setImageError(
+          true,
+        )
+      }
+
+      sx={{
+        width:
+          140,
+
+        minWidth:
+          140,
+
+        height:
+          140,
+
+        objectFit:
+          'cover',
+
+        bgcolor:
+          'action.hover',
+      }}
+    />
+  );
+}
+
+/* =========================================================
+   created_at処理
+========================================================= */
+
+/*
+ * DBから返ってくる、
+ *
+ * 2026-09-14 12:34:56
+ *
+ * を、
+ *
+ * date = 2026-09-14
+ * time = 12:34
+ *
+ * に分ける。
+ */
+function splitCreatedAt(
+  createdAt: string,
+) {
+  /*
+   * created_atが空の場合。
+   */
+  if (!createdAt) {
+    return {
+      date:
+        '-',
+
+      time:
+        '',
+    };
+  }
+
+  /*
+   * 空白でDateとTimeを分割。
+   */
+  const [
+    date,
+    rawTime = '',
+  ] =
+    createdAt.split(
+      ' ',
+    );
+
+  return {
+    date,
+
+    /*
+     * 秒を除いてHH:mmだけ表示。
+     */
+    time:
+      rawTime.slice(
+        0,
+        5,
+      ),
+  };
+}
+
+/* =========================================================
+   Asset Timeline
+========================================================= */
+
+/*
+ * 選択されたAssetの
+ * 全RevisionをTimeline表示する。
+ */
+function AssetHistoryTimeline({
+  histories,
+}: {
+  histories:
+    AssetData[];
+}) {
+  /*
+   * 履歴なし。
+   */
+  if (
+    histories.length ===
+    0
+  ) {
+    return (
+      <Box
+        sx={{
+          minHeight:
+            300,
+
+          display:
+            'flex',
+
+          alignItems:
+            'center',
+
+          justifyContent:
+            'center',
+
+          border:
+            1,
+
+          borderColor:
+            'divider',
+
+          borderRadius:
+            2,
+        }}
+      >
+        <Typography
+          color="text.secondary"
+        >
+          このアセットには履歴がありません
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Timeline
+      position="right"
+      sx={{
+        m:
+          0,
+
+        p:
+          0,
+
+        /*
+         * MUI Timelineが作る
+         * 不要な左余白を削除。
+         */
+        '& .MuiTimelineItem-root:before':
+          {
+            flex:
+              0,
+
+            padding:
+              0,
+          },
+      }}
+    >
+      {histories.map(
+        (
+          history,
+          index,
+        ) => {
+          /*
+           * created_atを
+           * Date / Timeに分割。
+           */
+          const {
+            date,
+            time,
+          } =
+            splitCreatedAt(
+              history.created_at,
+            );
+
+          return (
+            <TimelineItem
+              key={
+                history.id
+              }
+              sx={{
+                minHeight:
+                  180,
+              }}
+            >
+              {/* =========================
+                  左側
+                  更新日時
+              ========================= */}
+
+              <TimelineOppositeContent
+                sx={{
+                  flex:
+                    '0 0 170px',
+
+                  pt:
+                    2.2,
+
+                  pr:
+                    3,
+
+                  textAlign:
+                    'right',
+                }}
+              >
+                {/* Date */}
+
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight:
+                      600,
+                  }}
+                >
+                  {
+                    date
+                  }
+                </Typography>
+
+                {/* Time */}
+
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  {
+                    time
+                  }
+                </Typography>
+              </TimelineOppositeContent>
+
+              {/* =========================
+                  中央
+                  Timeline
+              ========================= */}
+
+              <TimelineSeparator>
+                {/* Timeline Point */}
+
+                <TimelineDot
+                  color="primary"
+                  sx={{
+                    mt:
+                      2,
+                  }}
+                >
+                  <HistoryIcon
+                    sx={{
+                      fontSize:
+                        16,
+                    }}
+                  />
+                </TimelineDot>
+
+                {/* 最後以外は線を表示 */}
+
+                {index !==
+                  histories.length -
+                    1 && (
+                  <TimelineConnector />
+                )}
+              </TimelineSeparator>
+
+              {/* =========================
+                  右側
+                  Asset情報
+              ========================= */}
+
+              <TimelineContent
+                sx={{
+                  pt:
+                    0.5,
+
+                  pb:
+                    4,
+
+                  pl:
+                    3,
+                }}
+              >
+                <Card
+                  variant="outlined"
+                  sx={{
+                    display:
+                      'flex',
+
+                    width:
+                      '100%',
+
+                    maxWidth:
+                      720,
+
+                    minHeight:
+                      140,
+
+                    overflow:
+                      'hidden',
+
+                    cursor:
+                      'pointer',
+
+                    transition:
+                      'transform 0.15s ease, box-shadow 0.15s ease',
+
+                    /*
+                     * Hover時。
+                     */
+                    '&:hover':
+                      {
+                        transform:
+                          'translateY(-2px)',
+
+                        boxShadow:
+                          4,
+                      },
+                  }}
+                >
+                  {/* Asset画像 */}
+
+                  <AssetThumbnail
+                    src={
+                      history.thumbnail_path
+                    }
+
+                    alt={
+                      history.name
+                    }
+                  />
+
+                  {/* Asset情報 */}
+
+                  <CardContent
+                    sx={{
+                      flex:
+                        1,
+
+                      display:
+                        'flex',
+
+                      flexDirection:
+                        'column',
+
+                      justifyContent:
+                        'center',
+
+                      px:
+                        3,
+                    }}
+                  >
+                    {/* Asset名 + Revision */}
+
+                    <Box
+                      sx={{
+                        display:
+                          'flex',
+
+                        alignItems:
+                          'center',
+
+                        flexWrap:
+                          'wrap',
+
+                        gap:
+                          1,
+
+                        mb:
+                          1.5,
+                      }}
+                    >
+                      {/* Asset名 */}
+
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight:
+                            700,
+                        }}
+                      >
+                        {
+                          history.name
+                        }
+                      </Typography>
+
+                      {/* Revision */}
+
+                      <Chip
+                        label={`#${history.revision}`}
+
+                        size="small"
+
+                        color="primary"
+
+                        variant="outlined"
+                      />
+
+                      {/* Unreal Class */}
+
+                      <Chip
+                        label={
+                          history.class
+                        }
+
+                        size="small"
+
+                        variant="outlined"
+                      />
+                    </Box>
+
+                    {/* Commit Message */}
+
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        mb:
+                          1,
+                      }}
+                    >
+                      {history.commit_message ??
+                        'コミットメッセージなし'}
+                    </Typography>
+
+                    {/* game_path */}
+
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        wordBreak:
+                          'break-all',
+                      }}
+                    >
+                      {
+                        history.game_path
+                      }
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </TimelineContent>
+            </TimelineItem>
+          );
+        },
+      )}
+    </Timeline>
+  );
+}
+
+/* =========================================================
+   Page
+========================================================= */
+
+export default function Page() {
+  /* =======================================================
+     State
+  ======================================================= */
+
+  /*
+   * DBから取得した
+   * 全Asset・全Revision。
+   */
+  const [
+    assets,
+    setAssets,
+  ] =
+    React.useState<
+      AssetData[]
+    >([]);
+
+  /*
+   * 現在TreeViewで
+   * 選択されているAsset。
+   */
+  const [
+    selectedItemId,
+    setSelectedItemId,
+  ] =
+    React.useState<
+      string | null
+    >(null);
+
+  /*
+   * API読み込み中。
+   */
+  const [
+    loading,
+    setLoading,
+  ] =
+    React.useState(
+      true,
+    );
+
+  /*
+   * API Error。
+   */
+  const [
+    error,
+    setError,
+  ] =
+    React.useState<
+      string | null
+    >(null);
+
+  /* =======================================================
+     Asset一覧取得
+  ======================================================= */
+
+  React.useEffect(
+    () => {
+      /*
+       * Componentが破棄された際に
+       * fetchを停止するためのController。
+       */
+      const controller =
+        new AbortController();
+
+      /*
+       * APIからAssetデータを取得する。
+       */
+      async function fetchAssets() {
+        try {
+          /*
+           * Loading開始。
+           */
+          setLoading(
+            true,
+          );
+
+          /*
+           * 古いErrorを消す。
+           */
+          setError(
+            null,
+          );
+
+          /*
+           * Next.js Route Handlerを呼ぶ。
+           */
+          const response =
+            await fetch(
+              '/api/assets',
+              {
+                /*
+                 * DB更新をすぐ反映するため、
+                 * Cacheを利用しない。
+                 */
+                cache:
+                  'no-store',
+
+                signal:
+                  controller.signal,
+              },
+            );
+
+          /*
+           * 200系以外はError。
+           */
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              'Asset情報の取得に失敗しました。',
+            );
+          }
+
+          /*
+           * JSON → AssetData[]
+           */
+          const data:
+            AssetData[] =
+            await response.json();
+
+          /*
+           * React Stateへ保存。
+           */
+          setAssets(
+            data,
+          );
+        } catch (err) {
+          /*
+           * AbortControllerによる
+           * 意図的なキャンセルは無視。
+           */
+          if (
+            err instanceof
+              DOMException &&
+            err.name ===
+              'AbortError'
+          ) {
+            return;
+          }
+
+          console.error(
+            err,
+          );
+
+          /*
+           * 画面表示用Error。
+           */
+          setError(
+            'Asset情報を取得できませんでした。',
+          );
+        } finally {
+          /*
+           * Loading終了。
+           */
+          setLoading(
+            false,
+          );
+        }
+      }
+
+      /*
+       * API取得開始。
+       */
+      fetchAssets();
+
+      /*
+       * Component破棄時。
+       */
+      return () => {
+        controller.abort();
+      };
+    },
+    [],
+  );
+
+  /* =======================================================
+     最新Revision取得
+  ======================================================= */
+
+  /*
+   * TreeViewに表示するのは
+   * 最新RevisionのAssetだけ。
+   */
+  const latestAssets =
+    React.useMemo(
+      () =>
+        getLatestAssets(
+          assets,
+        ),
+
+      [
+        assets,
+      ],
+    );
+
+  /* =======================================================
+     TreeViewデータ生成
+  ======================================================= */
+
+  /*
+   * Folderなしの
+   * Asset一覧を作成する。
+   */
+  const treeItems =
+    React.useMemo(
+      () =>
+        createTreeItems(
+          latestAssets,
+        ),
+
+      [
+        latestAssets,
+      ],
+    );
+
+  /* =======================================================
+     最初のAssetを自動選択
+  ======================================================= */
+
+  React.useEffect(
+    () => {
+      /*
+       * 既に選択されているなら
+       * 何もしない。
+       */
+      if (
+        selectedItemId
+      ) {
+        return;
+      }
+
+      /*
+       * Assetが1件以上あれば、
+       * 最初のAssetを初期選択。
+       */
+      if (
+        latestAssets.length >
+        0
+      ) {
+        setSelectedItemId(
+          `asset:${latestAssets[0].game_path}`,
+        );
+      }
+    },
+    [
+      latestAssets,
+      selectedItemId,
+    ],
+  );
+
+  /* =======================================================
+     selectedItemId → game_path
+  ======================================================= */
+
+  /*
+   * TreeView ID:
+   *
+   * asset:/Game/BP_Player
+   *
+   * ↓
+   *
+   * /Game/BP_Player
+   *
+   * に変換する。
+   */
+  const selectedGamePath =
+    selectedItemId?.startsWith(
+      'asset:',
+    )
+      ? selectedItemId.slice(
+          'asset:'.length,
+        )
+      : null;
+
+  /* =======================================================
+     選択Assetの履歴取得
+  ======================================================= */
+
+  /*
+   * DBから取得済みの全Revisionの中から、
+   * 選択されたgame_pathと一致するものだけ抽出。
+   */
+  const histories =
+    React.useMemo(
+      () => {
+        /*
+         * Asset未選択。
+         */
+        if (
+          !selectedGamePath
+        ) {
+          return [];
+        }
+
+        return assets
+          /*
+           * 同じAssetだけ抽出。
+           */
+          .filter(
+            (asset) =>
+              asset.game_path ===
+              selectedGamePath,
+          )
+
+          /*
+           * 最新Revisionから表示。
+           */
+          .sort(
+            (
+              a,
+              b,
+            ) =>
+              b.revision -
+              a.revision,
+          );
+      },
+      [
+        assets,
+        selectedGamePath,
+      ],
+    );
+
+  /* =======================================================
+     選択Asset名
+  ======================================================= */
+
+  /*
+   * histories[0]は最新Revision。
+   */
+  const selectedAssetName =
+    histories.length >
+    0
+      ? histories[0].name
+      : null;
+
+  /* =======================================================
+     Loading画面
+  ======================================================= */
+
+  if (
+    loading
+  ) {
+    return (
+      <Box
+        sx={{
+          minHeight:
+            '100vh',
+
+          display:
+            'flex',
+
+          justifyContent:
+            'center',
+
+          alignItems:
+            'center',
+
+          gap:
+            2,
+        }}
+      >
+        <CircularProgress />
+
+        <Typography>
+          Assetを読み込んでいます...
+        </Typography>
+      </Box>
+    );
+  }
+
+  /* =======================================================
+     Page
+  ======================================================= */
+
+  return (
+    <Box
+      sx={{
+        minHeight:
+          '100vh',
+
+        width:
+          '100%',
+
+        p: {
+          xs:
+            2,
+
+          md:
+            4,
+        },
+
+        bgcolor:
+          'background.default',
+      }}
+    >
+      {/* ===============================
+          Header
+      =============================== */}
+
+      <Box
+        sx={{
+          mb:
+            3,
+        }}
+      >
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight:
+              700,
+          }}
+        >
+          Unreal Asset Browser
+        </Typography>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
+            mt:
+              0.5,
+          }}
+        >
+          AssetとRevision履歴を表示します
+        </Typography>
+      </Box>
+
+      <Divider
+        sx={{
+          mb:
+            3,
+        }}
+      />
+
+      {/* ===============================
+          API Error
+      =============================== */}
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{
+            mb:
+              3,
+          }}
+        >
+          {
+            error
+          }
+        </Alert>
+      )}
+
+      {/* ===============================
+          DBが空の場合
+      =============================== */}
+
+      {!error &&
+        assets.length ===
+          0 && (
+          <Alert
+            severity="info"
+          >
+            DBにAssetが登録されていません。
+          </Alert>
+        )}
+
+      {/* ===============================
+          Main
+      =============================== */}
+
+      {!error &&
+        assets.length >
+          0 && (
+          <Box
+            sx={{
+              display:
+                'flex',
+
+              flexDirection:
+                {
+                  xs:
+                    'column',
+
+                  md:
+                    'row',
+                },
+
+              alignItems:
+                'flex-start',
+
+              gap:
+                4,
+            }}
+          >
+            {/* ===========================
+                左側
+                Asset一覧
+            =========================== */}
+
+            <Box
+              sx={{
+                width:
+                  {
+                    xs:
+                      '100%',
+
+                    md:
+                      300,
+                  },
+
+                flexShrink:
+                  0,
+
+                border:
+                  1,
+
+                borderColor:
+                  'divider',
+
+                borderRadius:
+                  2,
+
+                bgcolor:
+                  'background.paper',
+
+                p:
+                  2,
+
+                maxHeight:
+                  'calc(100vh - 180px)',
+
+                overflowY:
+                  'auto',
+              }}
+            >
+              {/* Asset Tree Title */}
+
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight:
+                    700,
+
+                  mb:
+                    2,
+
+                  px:
+                    1,
+                }}
+              >
+                Assets
+              </Typography>
+
+              {/* =========================
+                  Asset一覧
+
+                  Directoryは存在しない。
+              ========================= */}
+
+              <RichTreeView
+                /*
+                 * BP_Player
+                 * T_Player
+                 * M_Player
+                 * ...
+                 *
+                 * のような
+                 * フラットなAsset一覧。
+                 */
+                items={
+                  treeItems
+                }
+
+                /*
+                 * 現在選択中。
+                 */
+                selectedItems={
+                  selectedItemId
+                }
+
+                /*
+                 * Assetをクリックした時。
+                 */
+                onSelectedItemsChange={(
+                  _event,
+                  itemId,
+                ) => {
+                  /*
+                   * single selectionなので
+                   * 通常はstring。
+                   */
+                  if (
+                    Array.isArray(
+                      itemId,
+                    )
+                  ) {
+                    setSelectedItemId(
+                      itemId[0] ??
+                        null,
+                    );
+
+                    return;
+                  }
+
+                  /*
+                   * 選択Assetを更新。
+                   */
+                  setSelectedItemId(
+                    itemId ??
+                      null,
+                  );
+                }}
+
+                /*
+                 * 自作のAsset表示。
+                 */
+                slots={{
+                  item:
+                    CustomTreeItem,
+                }}
+
+                sx={{
+                  width:
+                    '100%',
+
+                  height:
+                    'fit-content',
+                }}
+              />
+            </Box>
+
+            {/* ===========================
+                右側
+                Commit History
+            =========================== */}
+
+            <Box
+              sx={{
+                flexGrow:
+                  1,
+
+                width:
+                  '100%',
+
+                minWidth:
+                  0,
+              }}
+            >
+              {/* =========================
+                  Asset Header
+              ========================= */}
+
+              <Box
+                sx={{
+                  display:
+                    'flex',
+
+                  alignItems:
+                    'center',
+
+                  justifyContent:
+                    'space-between',
+
+                  flexWrap:
+                    'wrap',
+
+                  gap:
+                    2,
+
+                  mb:
+                    3,
+                }}
+              >
+                <Box>
+                  {/* 選択Asset名 */}
+
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight:
+                        700,
+                    }}
+                  >
+                    {selectedAssetName ??
+                      'Assetを選択してください'}
+                  </Typography>
+
+                  {/* Commit History Label */}
+
+                  {selectedAssetName && (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        mt:
+                          0.5,
+                      }}
+                    >
+                      Commit History
+                    </Typography>
+                  )}
+                </Box>
+
+                {/* Revision数 */}
+
+                {histories.length >
+                  0 && (
+                  <Chip
+                    label={`${histories.length} revisions`}
+
+                    variant="outlined"
+
+                    size="small"
+                  />
+                )}
+              </Box>
+
+              {/* =========================
+                  Timeline
+              ========================= */}
+
+              {selectedGamePath ? (
+                /*
+                 * 選択されたAssetの
+                 * Revision履歴。
+                 */
+                <AssetHistoryTimeline
+                  histories={
+                    histories
+                  }
+                />
+              ) : (
+                /*
+                 * Asset未選択。
+                 */
+                <Box
+                  sx={{
+                    minHeight:
+                      400,
+
+                    display:
+                      'flex',
+
+                    alignItems:
+                      'center',
+
+                    justifyContent:
+                      'center',
+
+                    border:
+                      1,
+
+                    borderColor:
+                      'divider',
+
+                    borderRadius:
+                      2,
+                  }}
+                >
+                  <Typography
+                    color="text.secondary"
+                  >
+                    左側からAssetを選択してください
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        )}
+    </Box>
+  );
+}
+```
