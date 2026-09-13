@@ -716,7 +716,7 @@ function AssetHistoryTimeline({
             >
               <Typography
                 variant="body2"
-                fontWeight={600}
+                sx={{ fontWeight: 600 }}
               >
                 {
                   history.updatedAt.split(
@@ -823,7 +823,7 @@ function AssetHistoryTimeline({
                   >
                     <Typography
                       variant="h6"
-                      fontWeight={700}
+                      sx={{ fontWeight: 700 }}
                     >
                       {history.assetName}
                     </Typography>
@@ -908,7 +908,7 @@ export default function Page() {
       <Box sx={{ mb: 3 }}>
         <Typography
           variant="h4"
-          fontWeight={700}
+          sx={{ fontWeight: 700 }}
         >
           Unreal Asset Browser
         </Typography>
@@ -965,8 +965,8 @@ export default function Page() {
         >
           <Typography
             variant="subtitle1"
-            fontWeight={700}
             sx={{
+              fontWeight: 700,
               mb: 2,
               px: 1,
             }}
@@ -1062,7 +1062,7 @@ export default function Page() {
             <Box>
               <Typography
                 variant="h5"
-                fontWeight={700}
+                sx={{ fontWeight: 700 }}
               >
                 {selectedAssetName ??
                   'Assetを選択してください'}
