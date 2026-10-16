@@ -1,4 +1,68 @@
-            full_.store(true, std::memory_order_release);
+#include "PcmRecorder.h"
+
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <limits>
+
+namespace {
+void WriteU16(std::ostream& out, std::uint16_t v) {
+    for (int i = 0; i < 2; ++i) out.put(static_cast<char>((v >> (8*i)) & 255));
+}
+void WriteU32(std::ostream& out, std::uint32_t v) {
+    for (int i = 0; i < 4; ++i) out.put(static_cast<char>((v >> (8*i)) & 255));
+}
+std::int16_t ConvertFloat(float value) {
+    if (!std::isfinite(value)) return 0;
+    value = std::clamp(value, -1.0f, 1.0f);
+    return static_cast<std::int16_t>(
+        std::clamp(std::lround(value * 32767.0f), -32768L, 32767L));
+}
+}
+
+bool PcmRecorder::Begin(int sampleRate, int channels, int maxSeconds) {
+    if (sampleRate <= 0 || sampleRate > 192000 ||
+        channels <= 0 || channels > 2 || maxSeconds <= 0 || maxSeconds > 60)
+        return false;
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (capturing_) return false;
+    sampleRate_ = sampleRate;
+    channels_ = channels;
+    frames_ = 0;
+    invalidFormat_ = false;
+    full_.store(false, std::memory_order_release);
+    pcm_.assign(static_cast<std::size_t>(sampleRate) * channels * maxSeconds, 0);
+    capturing_ = true;
+    return true;
+}
+
+void PcmRecorder::FilterCallback(void* obj, CriAtomExPlaybackId,
+    CriAtomPcmFormat format, CriSint32 numChannels,
+    CriSint32 numSamples, void* data[]) {
+    if (obj != nullptr)
+        static_cast<PcmRecorder*>(obj)->Append(format, numChannels, numSamples, data);
+}
+
+void PcmRecorder::Append(CriAtomPcmFormat format, int numChannels,
+    int numSamples, void* data[]) {
+    if (numSamples <= 0 || data == nullptr) return;
+    // コールバック内でファイルI/O、HTTP、メモリ再確保は行わない。
+    // mutexで共有状態を守る。製品版はロックフリーのリングバッファが推奨。
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (!capturing_) return;
+    if (numChannels != channels_ ||
+        (format != CRIATOM_PCM_FORMAT_FLOAT32 && format != CRIATOM_PCM_FORMAT_SINT16)) {
+        invalidFormat_ = true;
+        capturing_ = false;
+        full_.store(true, std::memory_order_release);
+        return;
+    }
+    for (int ch = 0; ch < channels_; ++ch) {
+        if (data[ch] == nullptr) {
+            invalidFormat_ = true;
+            capturing_ = false;
+full_.store(true, std::memory_order_release);
             return;
         }
     }
