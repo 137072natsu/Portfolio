@@ -7,22 +7,25 @@ import {
   Card,
   CardActionArea,
   CardContent,
-  Chip,
   InputAdornment,
-  Stack,
+  Rating,
   TextField,
   Typography,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import MovieFilterIcon from "@mui/icons-material/MovieFilter";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import MovieFilterRoundedIcon from "@mui/icons-material/MovieFilterRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import CalendarMonthRoundedIcon from "@mui/icons-material/CalendarMonthRounded";
+import GridViewRoundedIcon from "@mui/icons-material/GridViewRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
 import { TreeItem } from "@mui/x-tree-view/TreeItem";
 
-// MCUインフィニティ・サーガ（公開順）のフェーズ
-// 公開年は米国での劇場公開年を採用しています。
+
 type Phase = 1 | 2 | 3;
+type PhaseFilter = Phase | "all";
 
 type Movie = {
   id: string;
@@ -30,10 +33,8 @@ type Movie = {
   year: number;
   phase: Phase;
   description: string;
-  // public/images/marvel/ に置いた画像を使用する
-  thumbnail: string;
-  // 感想と評価は未登録。後から各作品に書き足せます。
-  review?: string;
+  thumbnail: string;  // public/images/marvel/ 以下の画像
+  review?: string;    // ここに感想を書き込む
   rating: number;
 };
 
@@ -44,10 +45,9 @@ const movies: Movie[] = [
     description: "天才発明家トニー・スタークが、自ら開発したアーマーでヒーローとして歩み始める物語。",
     thumbnail: "/images/marvel/iron-man.jpg",
     rating: 4.3,
-    review: `すべての原点。
-    
-    ロボットもの作品もあまり見ないし、金持ちも好きではないし、おっさんだしで正直期待していなかった。むしろ見るのを避けていたまである。
-    しかし、アベンジャーズの予習のためになんとなく見るかあと重い腰を上げて付けてみたところ,,,
+    review: `原点にして...
+
+    さすがに面白い。自分はこれを見ずにいきなりアベンジャーズから入ったので、当時はなんか金持ちのロボットスーツ持ったおっさんおるなぁって感じ
     
     開始10分くらいで一気に引き込まれた。トニーのキャラクターがとにかく魅力的で、彼の成長や葛藤がリアルに描かれている。アクションシーンも迫力満点で、特にアイアンマンのスーツのデザインや飛行シーンは圧巻だった。
     そもそもなぜアイアンスーツを作ることになったのか、彼が何と戦うのかというルーツが丁寧に描かれており感情移入もすごいしやすい。
@@ -191,30 +191,37 @@ const movies: Movie[] = [
 ];
 
 const phases: Phase[] = [1, 2, 3];
+const phaseColors: Record<Phase, string> = {
+  1: "#f05a5b",
+  2: "#e7b36c",
+  3: "#b7a0f2",
+};
+const background = "#080a10";
+const panel = "#10141d";
+const muted = "#939baa";
 
-// フェーズ別の公開年を自動抽出する。後から作品を増やしても自動で反映。
+
+// 元データの公開順をそのまま採用
 const yearsByPhase: Record<Phase, number[]> = {
   1: [...new Set(movies.filter((m) => m.phase === 1).map((m) => m.year))],
   2: [...new Set(movies.filter((m) => m.phase === 2).map((m) => m.year))],
   3: [...new Set(movies.filter((m) => m.phase === 3).map((m) => m.year))],
 };
-
-// 初回表示は全フェーズと公開年を展開する。
 const initialExpandedItems = phases.flatMap((phase) => [
   `phase-${phase}`,
   ...yearsByPhase[phase].map((year) => `phase-${phase}-year-${year}`),
 ]);
+const averageRating = movies.reduce((sum, movie) => sum + movie.rating, 0) / movies.length;
 
+const readableReview = (review?: string) =>
+  review?.split("\n").map((line) => line.trim()).join("\n").trim() || "";
 
-
-// 画像ファイルがないときに表示する代替サムネイル。
+// 画像が存在しない場合はグラデーションの代替ポスターを表示
 function MovieThumbnail({ movie }: { movie: Movie }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const phaseColor: Record<Phase, string> = {
-    1: "#82262d",
-    2: "#244a6d",
-    3: "#5b397f",
-  };
+  const number = String(movies.findIndex((m) => m.id === movie.id) + 1).padStart(2, "0");
+  const accent = phaseColors[movie.phase];
+
 
   return (
     <Box
@@ -222,290 +229,445 @@ function MovieThumbnail({ movie }: { movie: Movie }) {
         position: "relative",
         aspectRatio: "2 / 3",
         overflow: "hidden",
-        bgcolor: phaseColor[movie.phase],
-        backgroundImage: `linear-gradient(155deg, ${phaseColor[movie.phase]}, #0a101c 85%)`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        p: 3,
+        isolation: "isolate",
+        bgcolor: "#1a202e",
+        backgroundImage: `radial-gradient(circle at 50% 25%, ${accent}60, transparent 55%), linear-gradient(150deg, #22283b, #080b13)`,
       }}
     >
-      {/* サムネイルがない場合もカードが崩れない */}
-      <Box sx={{ textAlign: "center", color: "#fff" }}>
-        <MovieFilterIcon sx={{ fontSize: 42, opacity: 0.55, mb: 2 }} />
-        <Typography variant="overline" sx={{ display: "block", opacity: 0.8 }}>
-          MARVEL MOVIE REVIEW
+      {/* ポスターがまだない作品の代替画像 */}
+      <Box
+        sx={{
+          position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", textAlign: "center", p: 3,
+          color: "#f3f5f9",
+        }}
+      >
+        <MovieFilterRoundedIcon sx={{ fontSize: 46, color: accent, mb: 2 }} />
+        <Typography sx={{ fontSize: 10, letterSpacing: 3, fontWeight: 800, color: "#b4becd", mb: 1.5 }}>
+          THE INFINITY SAGA
         </Typography>
-        <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.4 }}>
+        <Typography sx={{ fontSize: "1.15rem", fontWeight: 900, lineHeight: 1.45 }}>
           {movie.title}
         </Typography>
       </Box>
       {!imageFailed && (
         <Box
+          className="poster-art"
           component="img"
           src={movie.thumbnail}
-          alt={`${movie.title} のサムネイル`}
+          alt={`${movie.title}のポスター`}
           loading="lazy"
           onError={() => setImageFailed(true)}
-          sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          sx={{
+            position: "absolute", inset: 0, width: "100%", height: "100%",
+            objectFit: "cover", transition: "transform 450ms cubic-bezier(.2,.7,.2,1)",
+          }}
         />
       )}
-      <Chip
-        label={`PHASE ${movie.phase}`}
-        size="small"
-        sx={{
-          position: "absolute", top: 12, left: 12,
-          bgcolor: "rgba(12,15,24,0.83)", color: "white", fontWeight: 700,
-          fontSize: "0.67rem", letterSpacing: 0.5,
-        }}
-      />
+      {/* ポスター上の共通オーバーレイ */}
+      <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(4,6,12,.53), transparent 35%, transparent 58%, rgba(5,8,14,.72))", pointerEvents: "none" }} />
+      <Box sx={{ position: "absolute", top: 13, left: 13, right: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box sx={{ px: 1.15, py: 0.5, bgcolor: "rgba(5,8,14,.77)", border: "1px solid rgba(255,255,255,.20)", borderRadius: 0.8, backdropFilter: "blur(6px)" }}>
+          <Typography sx={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.1, color: "#fff" }}>PHASE {movie.phase}</Typography>
+        </Box>
+        <Typography sx={{ fontSize: 14, fontWeight: 900, color: "#fff", fontVariantNumeric: "tabular-nums", textShadow: "0 2px 8px #000" }}>
+          {number}
+        </Typography>
+      </Box>
+      <Box sx={{ position: "absolute", bottom: 14, left: 15, right: 15, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <Typography sx={{ fontSize: 10, letterSpacing: 2.5, fontWeight: 900, color: "rgba(255,255,255,.85)" }}>MCU / ARCHIVE</Typography>
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{movie.year}</Typography>
+      </Box>
     </Box>
   );
 }
 
+function MovieCard({ movie, onSelect }: { movie: Movie; onSelect: () => void }) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        bgcolor: panel, color: "#f8f9fb", borderColor: "#282e3c", borderRadius: 2,
+        overflow: "hidden", display: "flex", flexDirection: "column",
+        boxShadow: "0 12px 28px rgba(0,0,0,.12)",
+        transition: "transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease",
+        "&:hover": { transform: "translateY(-6px)", borderColor: "#d64a4d", boxShadow: "0 20px 40px rgba(0,0,0,.33)" },
+        "&:hover .poster-art": { transform: "scale(1.055)" },
+      }}
+    >
+      <CardActionArea onClick={onSelect} sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start" }}>
+        <MovieThumbnail movie={movie} />
+        <CardContent sx={{ p: { xs: 2.2, md: 2.5 }, flex: 1, display: "flex", flexDirection: "column", "&:last-child": { pb: 2.5 } }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.2 }}>
+            <Box sx={{ width: 17, height: 2, bgcolor: phaseColors[movie.phase] }} />
+            <Typography sx={{ color: "#a8b0be", letterSpacing: 1.4, fontSize: 10.5, fontWeight: 800 }}>
+              PHASE {movie.phase} — {movie.year}
+            </Typography>
+          </Box>
+          <Typography sx={{ fontWeight: 850, fontSize: "1.03rem", lineHeight: 1.55, minHeight: 50, mb: 1 }}>
+            {movie.title}
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: muted, lineHeight: 1.75, mb: 2.4, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>
+            {movie.description}
+          </Typography>
+          <Box sx={{ mt: "auto", borderTop: "1px solid #282e3c", pt: 1.7, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.9 }}>
+              <StarRoundedIcon sx={{ color: "#ffcc7a", fontSize: 20 }} />
+              <Typography sx={{ fontWeight: 900, fontSize: 16, fontVariantNumeric: "tabular-nums" }}>
+                {movie.rating.toFixed(1)}
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: "#737c8d" }}>/ 5.0</Typography>
+            </Box>
+            <Box sx={{ color: "#f16b6d", display: "flex", alignItems: "center", gap: 0.4 }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 850, letterSpacing: 1 }}>VIEW</Typography>
+              <ArrowForwardRoundedIcon sx={{ fontSize: 18 }} />
+            </Box>
+          </Box>
+        </CardContent>
+      </CardActionArea>
+    </Card>
+  );
+}
+
+function ReviewPanel({ movie }: { movie: Movie }) {
+  const review = readableReview(movie.review);
+  return (
+    <Card
+      component="article"
+      variant="outlined"
+      sx={{
+        minWidth: 0, bgcolor: panel, color: "#fff", borderColor: "#2a303e",
+        borderRadius: 2, overflow: "hidden", boxShadow: "0 12px 32px rgba(0,0,0,.16)",
+        backgroundImage: "radial-gradient(circle at 100% 0%, rgba(213,53,64,.11), transparent 45%)",
+      }}
+    >
+      <Box sx={{ height: 4, background: "linear-gradient(90deg, #ee4e58, #8f2939 58%, transparent)" }} />
+      <Box sx={{ p: { xs: 3, sm: 4, lg: 5 } }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap", mb: 3.5 }}>
+          <Typography sx={{ color: "#ff6a72", fontSize: 11, letterSpacing: 3, fontWeight: 900 }}>
+            PERSONAL FILM JOURNAL
+          </Typography>
+          <Typography sx={{ color: "#768091", fontSize: 11, fontWeight: 850, letterSpacing: 1.2 }}>
+            REVIEW / {String(movies.findIndex((m) => m.id === movie.id) + 1).padStart(2, "0")}
+          </Typography>
+        </Box>
+        <Typography sx={{ fontSize: { xs: 24, md: 30, lg: 36 }, lineHeight: 1.35, fontWeight: 900, letterSpacing: -0.6, mb: 1.2 }}>
+          {movie.title}
+        </Typography>
+        <Typography sx={{ color: muted, fontSize: 12, letterSpacing: 1.25, mb: 3 }}>
+          {movie.year} / PHASE {movie.phase} / THE INFINITY SAGA
+        </Typography>
+        <Box sx={{ borderBlock: "1px solid #303543", py: 2.3, mb: 3.5, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.8 }}>
+          <Typography sx={{ color: "#a5afc0", fontSize: 11, letterSpacing: 1.6, fontWeight: 850 }}>MY RATING</Typography>
+          <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.4 }}>
+            <Typography sx={{ fontSize: 36, fontWeight: 900, lineHeight: 1, color: "#ffcf86", fontVariantNumeric: "tabular-nums" }}>
+              {movie.rating.toFixed(1)}
+            </Typography>
+            <Typography sx={{ fontSize: 13, color: muted }}>/ 5.0</Typography>
+          </Box>
+          <Rating
+            value={movie.rating}
+            precision={0.1}
+            max={5}
+            readOnly
+            size="small"
+            sx={{ color: "#ffcf86", "& .MuiRating-iconEmpty": { color: "#454b58" } }}
+          />
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, mb: 2.2 }}>
+          <Box sx={{ width: 4, height: 21, bgcolor: "#f45d65", borderRadius: 2 }} />
+          <Typography sx={{ fontSize: 12, fontWeight: 900, letterSpacing: 2.1, color: "#e3e8f1" }}>REVIEW NOTES</Typography>
+        </Box>
+        {review ? (
+          <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: { xs: 14, md: 15 }, color: "#d4d8e2", lineHeight: 2.2, letterSpacing: 0.15 }}>
+            {review}
+          </Typography>
+        ) : (
+          <Box sx={{ border: "1px dashed #3c4453", p: 3, borderRadius: 1.5, bgcolor: "rgba(255,255,255,.018)" }}>
+            <Typography sx={{ fontSize: 14, color: "#aab3c2", lineHeight: 1.9 }}>
+              まだレビューは登録されていません。 <Box component="code" sx={{ color: "#ff8388" }}>movie.review</Box> に感想を書き込むと、ここに表示されます。
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    </Card>
+  );
+}
+
+
+
+
 
 export default function Page() {
-  // null なら「全作品」、ID が入っていればその1作品だけ表示。
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState<PhaseFilter>("all");
 
-  const selectedMovie = movies.find((movie) => movie.id === selectedMovieId);
-
+  const selectedMovie = movies.find((movie) => movie.id === selectedMovieId) ?? null;
   const filteredMovies = useMemo(() => {
     const keyword = searchText.trim().toLocaleLowerCase();
     return movies.filter((movie) => {
       const matchesSelection = selectedMovieId === null || movie.id === selectedMovieId;
-      const matchesSearch =
-        keyword.length === 0 ||
-        `${movie.title} ${movie.description} ${movie.year} フェーズ${movie.phase}`
-          .toLocaleLowerCase()
-          .includes(keyword);
-      return matchesSelection && matchesSearch;
+      const matchesPhase = selectedMovieId !== null || phaseFilter === "all" || movie.phase === phaseFilter;
+      const searchable = `${movie.title} ${movie.description} ${movie.year} phase ${movie.phase} ${movie.review || ""}`.toLocaleLowerCase();
+      return matchesSelection && matchesPhase && (keyword === "" || searchable.includes(keyword));
     });
-  }, [selectedMovieId, searchText]);
+  }, [selectedMovieId, searchText, phaseFilter]);
 
   const selectMovie = (id: string) => {
     setSelectedMovieId(id);
     setSearchText("");
+    setPhaseFilter("all");
   };
-
   const showAllMovies = () => {
     setSelectedMovieId(null);
+    setSearchText("");
+    setPhaseFilter("all");
+  };
+  const selectPhase = (phase: PhaseFilter) => {
+    setSelectedMovieId(null);
+    setPhaseFilter(phase);
     setSearchText("");
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "#f6f7f9", color: "#18202b", px: { xs: 2, md: 4 }, py: 4 }}>
-      <Box sx={{ maxWidth: 1500, mx: "auto" }}>
-        {/* タイトル領域 */}
-        <Box sx={{ mb: 4, borderBottom: "1px solid #e2e5eb", pb: 3 }}>
-          <Typography variant="overline" sx={{ color: "#c62828", fontWeight: 900, letterSpacing: 3 }}>
-            MARVEL STUDIOS / THE INFINITY SAGA
-          </Typography>
-          <Typography variant="h3" sx={{ fontWeight: 900, fontSize: { xs: "2rem", md: "2.8rem" }, mt: 0.5 }}>
-            Movie Review Archive
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#687384", mt: 1 }}>
-            インフィニティ・サーガ全23作品のレビューを、公開順に振り返る。
+    <Box sx={{ minHeight: "100vh", bgcolor: background, color: "#f8f9fc", fontFamily: "'Inter', 'Noto Sans JP', sans-serif", pb: 10, overflowX: "hidden" }}>
+      {/* ページの上部に細いフィルム風のライン */}
+      <Box sx={{ height: 4, background: "linear-gradient(90deg, #801d2d, #f0525f 35%, #f7ae74 65%, #681c2c)" }} />
+      <Box sx={{ mx: "auto", maxWidth: 1540, px: { xs: 2, sm: 3, lg: 5 } }}>
+        {/* ナビゲーション */}
+        <Box sx={{ height: 82, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #232735", gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.6 }}>
+            <Box sx={{ width: 38, height: 38, border: "1px solid #b7444d", borderRadius: 1, display: "grid", placeItems: "center", bgcolor: "#27151e", color: "#f06a70" }}>
+              <MovieFilterRoundedIcon sx={{ fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: 13, fontWeight: 950, letterSpacing: 2.5, lineHeight: 1.3 }}>THE MCU ARCHIVE</Typography>
+              <Typography sx={{ color: "#7c8697", letterSpacing: 2, fontSize: 9.5, mt: 0.45 }}>PERSONAL MOVIE JOURNAL</Typography>
+            </Box>
+          </Box>
+          <Typography sx={{ color: "#a6afbc", border: "1px solid #343949", borderRadius: 15, px: 1.7, py: 0.9, fontSize: 10.5, fontWeight: 850, letterSpacing: 1.5, display: { xs: "none", sm: "block" } }}>
+            VOL. 01 — 03 <Box component="span" sx={{ color: "#f05c66", ml: 1 }}>●</Box> 2008—2019
           </Typography>
         </Box>
 
-        <Box sx={{ display: "flex", gap: { xs: 2, md: 4 }, alignItems: "flex-start", flexDirection: { xs: "column", md: "row" } }}>
-          {/* 左側：ヒストリー / Tree View */}
-          <Box
-            component="aside"
-            sx={{
-              width: { xs: "100%", md: 286 }, flexShrink: 0,
-              position: { md: "sticky" }, top: { md: 24 },
-              bgcolor: "#fff", border: "1px solid #e2e5eb", borderRadius: 2,
-              p: 2, maxHeight: { md: "calc(100vh - 48px)" }, overflowY: "auto",
-            }}
-          >
-            <Stack
-              direction="row"
-              sx={{
-                alignItems: "center",
-                justifyContent: "space-between",
-                mb: 2,
-              }}
-            >
-              <Typography sx={{ fontSize: 12, letterSpacing: 1.5, fontWeight: 800, color: "#687384" }}>
-                HISTORY
-              </Typography>
-              <Typography variant="caption" color="text.secondary">2008 – 2019</Typography>
-            </Stack>
-            <Button
-              fullWidth
-              startIcon={<MovieFilterIcon />}
-              onClick={showAllMovies}
-              variant={selectedMovieId === null ? "contained" : "text"}
-              sx={{
-                justifyContent: "flex-start", textTransform: "none", fontWeight: 700,
-                mb: 1, bgcolor: selectedMovieId === null ? "#c62828" : "transparent",
-                color: selectedMovieId === null ? "#fff" : "#404b5a",
-                "&:hover": { bgcolor: selectedMovieId === null ? "#a91e1e" : "#f4f5f8" },
-              }}
-            >
-              全作品を表示（{movies.length}）
-            </Button>
+        {/* シネマティックなメインタイトル */}
+        <Box sx={{ position: "relative", isolation: "isolate", minHeight: { xs: 295, md: 330 }, py: { xs: 5, md: 6 }, mb: 4, borderBottom: "1px solid #222937", overflow: "hidden" }}>
+          <Box sx={{ position: "absolute", inset: 0, zIndex: -1, background: "radial-gradient(circle at 90% 48%, rgba(214,47,64,.25), transparent 32%),radial-gradient(circle at 65% -25%,rgba(107,65,112,.2), transparent 42%),linear-gradient(115deg,#080a10,#11101b 65%,#0b0a13)" }} />
+          <Box sx={{ position: "absolute", right: { xs: -120, md: -75 }, top: { xs: 15, md: -100 }, height: { xs: 310, md: 500 }, width: { xs: 310, md: 500 }, border: "1px solid rgba(240,80,92,.17)", borderRadius: "50%", boxShadow: "0 0 0 65px rgba(240,80,92,.025), 0 0 0 130px rgba(240,80,92,.015)", pointerEvents: "none" }} />
+          <Typography sx={{ color: "#fa777f", letterSpacing: 3.5, fontSize: 10.5, fontWeight: 900, mb: 2.1 }}>MARVEL STUDIOS / THE INFINITY SAGA</Typography>
+          <Typography component="h1" sx={{ fontSize: { xs: 41, sm: 59, md: 76 }, fontWeight: 950, letterSpacing: { xs: -1.3, md: -3.2 }, lineHeight: 1.06, maxWidth: 830, textShadow: "0 9px 32px rgba(0,0,0,.3)" }}>
+            Every hero.<br />
+            <Box component="span" sx={{ color: "#f05f67" }}>Every story.</Box>
+          </Typography>
+          <Typography sx={{ maxWidth: 590, mt: 2.5, color: "#aeb7c6", fontSize: { xs: 12.5, sm: 14 }, lineHeight: 1.9 }}>
+            ひとつのユニバース、23の物語。インフィニティ・サーガを公開順に辿りながら、映画の記憶と感想を記録するプライベート・アーカイブ。
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", mt: 3.5, gap: { xs: 2.5, sm: 4 } }}>
+            {[
+              { number: String(movies.length).padStart(2, "0"), label: "FILMS" },
+              { number: "03", label: "PHASES" },
+              { number: averageRating.toFixed(1), label: "AVG. RATING" },
+            ].map((item) => (
+              <Box key={item.label} sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
+                <Typography sx={{ fontSize: 24, fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>{item.number}</Typography>
+                <Typography sx={{ color: "#818b9b", fontSize: 10, fontWeight: 900, letterSpacing: 1.7 }}>{item.label}</Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
 
-            <SimpleTreeView
-              aria-label="マーベル作品の公開履歴"
-              defaultExpandedItems={initialExpandedItems}
-              // 親の「フェーズ」「年」は展開だけ、作品を選ぶとカードを絞り込む。
-              selectedItems={selectedMovieId ? `movie-${selectedMovieId}` : null}
-              onSelectedItemsChange={(
-                 _event: SyntheticEvent<Element, Event> | null,
-                 itemIds: string | null
-              ) => {
-                if (itemIds?.startsWith("movie-")) {
-                  selectMovie(itemIds.slice("movie-".length));
-                }
-              }}
-              sx={{
-                "& .MuiTreeItem-content": { borderRadius: 1, py: 0.45 },
-                "& .MuiTreeItem-content.Mui-selected": { bgcolor: "#fff0f0", color: "#b71c1c" },
-                "& .MuiTreeItem-content.Mui-selected:hover": { bgcolor: "#ffe4e4" },
-                "& .MuiTreeItem-label": { fontSize: 12.5 },
-              }}
-            >
-              {phases.map((phase) => (
-                <TreeItem
-                  key={phase}
-                  itemId={`phase-${phase}`}
-                  label={`PHASE ${phase}  (${movies.filter((m) => m.phase === phase).length})`}
-                  // 親項目は選択させず、開閉操作だけ許可する。
-                  disableSelection
+        {/* ヒストリー + 映画一覧 */}
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: { xs: 3, lg: 4 }, flexDirection: { xs: "column", md: "row" } }}>
+          <Box component="aside" sx={{ width: { xs: "100%", md: 255, lg: 274 }, flexShrink: 0, position: { md: "sticky" }, top: { md: 24 } }}>
+            <Box sx={{ border: "1px solid #2a303d", bgcolor: panel, borderRadius: 2, overflow: "hidden" }}>
+              <Box sx={{ p: 2.4, pb: 1.8, borderBottom: "1px solid #282e39", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+                  <CalendarMonthRoundedIcon sx={{ fontSize: 18, color: "#ef6670" }} />
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 950, letterSpacing: 2 }}>TIMELINE</Typography>
+                </Box>
+                <Typography sx={{ fontSize: 10, color: "#7d8698", fontWeight: 800 }}>08 — 19</Typography>
+              </Box>
+              <Box sx={{ p: 1.5, maxHeight: { md: "calc(100vh - 115px)" }, overflowY: "auto", "&::-webkit-scrollbar": { width: 5 }, "&::-webkit-scrollbar-thumb": { bgcolor: "#333b49", borderRadius: 5 } }}>
+                <Button
+                  fullWidth
+                  onClick={showAllMovies}
+                  startIcon={<GridViewRoundedIcon sx={{ fontSize: 17 }} />}
+                  sx={{
+                    textTransform: "none", justifyContent: "flex-start", fontSize: 12.5,
+                    fontWeight: 850, borderRadius: 1.1, py: 1.1, px: 1.45, mb: 1.5,
+                    bgcolor: selectedMovieId === null && phaseFilter === "all" ? "#b62f3d" : "transparent",
+                    color: selectedMovieId === null && phaseFilter === "all" ? "#fff" : "#b9c2d0",
+                    "&:hover": { bgcolor: selectedMovieId === null && phaseFilter === "all" ? "#c84350" : "#222938" },
+                  }}
                 >
-                  {yearsByPhase[phase].map((year) => (
+                  ALL MOVIES <Box component="span" sx={{ ml: "auto", fontSize: 11, opacity: 0.7 }}>{movies.length}</Box>
+                </Button>
+                <SimpleTreeView
+                  aria-label="MCU作品公開ヒストリー"
+                  defaultExpandedItems={initialExpandedItems}
+                  selectedItems={selectedMovieId ? `movie-${selectedMovieId}` : null}
+                  onSelectedItemsChange={(
+                    _event: SyntheticEvent<Element, Event> | null,
+                    itemId: string | null
+                  ) => {
+                    if (itemId?.startsWith("movie-")) selectMovie(itemId.slice(6));
+                  }}
+                  itemChildrenIndentation={13}
+                  sx={{
+                    "& .MuiTreeItem-content": { borderRadius: 1, py: 0.35, minHeight: 31, color: "#a8b2c1", transition: "background .15s" },
+                    "& .MuiTreeItem-content:hover": { bgcolor: "#212835" },
+                    "& .MuiTreeItem-content.Mui-selected": { bgcolor: "rgba(205,58,67,.17)", color: "#ff9299" },
+                    "& .MuiTreeItem-content.Mui-selected:hover": { bgcolor: "rgba(205,58,67,.24)" },
+                    "& .MuiTreeItem-iconContainer": { color: "#758194", mr: 0.35 },
+                    "& .MuiTreeItem-label": { fontSize: 12, lineHeight: 1.5 },
+                    "& .MuiTreeItem-groupTransition": { ml: 1.3, pl: 0.6, borderLeft: "1px solid #303647" },
+                  }}
+                >
+                  {phases.map((phase) => (
                     <TreeItem
-                      key={`${phase}-${year}`}
-                      itemId={`phase-${phase}-year-${year}`}
-                      label={`${year}年`}
+                      key={phase}
+                      itemId={`phase-${phase}`}
                       disableSelection
+                      label={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: phaseColors[phase], boxShadow: `0 0 10px ${phaseColors[phase]}66` }} />
+                          <Typography sx={{ fontSize: 11.5, fontWeight: 900, letterSpacing: 0.9, color: "#e9edf3" }}>PHASE {phase}</Typography>
+                          <Typography sx={{ ml: "auto", fontSize: 10, color: "#8894a4" }}>{movies.filter((m) => m.phase === phase).length}</Typography>
+                        </Box>
+                      }
                     >
-                      {movies
-                        .filter((movie) => movie.phase === phase && movie.year === year)
-                        .map((movie) => (
-                          <TreeItem
-                            key={movie.id}
-                            itemId={`movie-${movie.id}`}
-                            label={movie.title}
-                          />
-                        ))}
+                      {yearsByPhase[phase].map((year) => (
+                        <TreeItem
+                          key={`${phase}-${year}`}
+                          itemId={`phase-${phase}-year-${year}`}
+                          disableSelection
+                          label={<Typography sx={{ fontSize: 11, letterSpacing: 0.5, fontWeight: 800, color: "#8f9cad" }}>{year}</Typography>}
+                        >
+                          {movies.filter((movie) => movie.phase === phase && movie.year === year).map((movie) => (
+                            <TreeItem
+                              key={movie.id}
+                              itemId={`movie-${movie.id}`}
+                              label={<Typography sx={{ fontSize: 11.5, lineHeight: 1.65, color: "inherit" }}>{movie.title}</Typography>}
+                            />
+                          ))}
+                        </TreeItem>
+                      ))}
                     </TreeItem>
                   ))}
-                </TreeItem>
-              ))}
-            </SimpleTreeView>
+                </SimpleTreeView>
+              </Box>
+              <Box sx={{ px: 2.4, py: 1.6, borderTop: "1px solid #262c38" }}>
+                <Typography sx={{ color: "#6c788a", fontSize: 10, lineHeight: 1.7, letterSpacing: 0.4 }}>
+                  SELECT A FILM TO READ ITS STORY & REVIEW.
+                </Typography>
+              </Box>
+            </Box>
           </Box>
 
-          {/* 右側：検索とレビューカード */}
-          <Box component="main">
-          <Box
-              sx={{
-                display: "grid",
-                // 1作品選択時は「作品カード + レビューカード」の2カラム。
-                // 幅が狭い画面では縦並びに切り替える。
-                gridTemplateColumns: selectedMovieId
-                  ? { xs: "1fr", md: "minmax(240px, 340px) minmax(0, 1fr)" }
-                  : { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
-                gap: 2.5,
-              }}
-            >
-              {filteredMovies.map((movie) => (
-                <Card
-                  key={movie.id}
-                  variant="outlined"
-                  sx={{
-                    overflow: "hidden", borderRadius: 2.5, borderColor: "#e0e4eb",
-                    cursor: "pointer", boxShadow: "none", transition: "transform .18s, box-shadow .18s",
-                    "&:hover": { transform: "translateY(-3px)", boxShadow: "0 10px 28px rgba(24,32,43,.11)" },
+          <Box component="main" sx={{ minWidth: 0, flex: 1, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: { xs: "flex-start", sm: "center" }, flexDirection: { xs: "column", sm: "row" }, justifyContent: "space-between", gap: 2.5, mb: 2.8 }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 10.5, color: "#f16b72", fontWeight: 900, letterSpacing: 2.4, mb: 0.8 }}>
+                  {selectedMovie ? "NOW VIEWING / FEATURED FILM" : "EXPLORE / THE COLLECTION"}
+                </Typography>
+                <Typography component="h2" sx={{ fontSize: { xs: 25, md: 30 }, letterSpacing: -0.5, fontWeight: 900, lineHeight: 1.35 }}>
+                  {selectedMovie ? "Film details & review" : "The film collection"}
+                </Typography>
+                <Typography sx={{ mt: 0.7, fontSize: 12, color: "#929baa" }}>
+                  {selectedMovie ? "作品情報と鑑賞レビュー" : `${filteredMovies.length} titles in the archive`}
+                </Typography>
+              </Box>
+              {selectedMovie ? (
+                <Button onClick={showAllMovies} startIcon={<ArrowBackRoundedIcon />} sx={{ border: "1px solid #383f4d", bgcolor: "#141923", color: "#eff1f5", textTransform: "none", fontWeight: 800, px: 2, py: 1.1, borderRadius: 1.2, "&:hover": { bgcolor: "#232a38" } }}>
+                  全作品に戻る
+                </Button>
+              ) : (
+                <TextField
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  size="small"
+                  placeholder="Search titles, years, reviews..."
+                  aria-label="作品を検索"
+                  slotProps={{
+                    input: {
+                      startAdornment: <InputAdornment position="start"><SearchRoundedIcon sx={{ fontSize: 19, color: "#8a95a8" }} /></InputAdornment>,
+                      endAdornment: searchText ? (
+                        <InputAdornment position="end">
+                          <Box component="button" type="button" aria-label="検索をクリア" onClick={() => setSearchText("")} sx={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", border: 0, bgcolor: "transparent", color: "#8a95a8", p: 0.25 }}><CloseRoundedIcon sx={{ fontSize: 17 }} /></Box>
+                        </InputAdornment>
+                      ) : undefined,
+                    },
                   }}
-                >
-                  <CardActionArea onClick={() => selectMovie(movie.id)}>
-                  <MovieThumbnail movie={movie} />
-                  <CardContent sx={{ p: 2.3, "&:last-child": { pb: 2.3 } }}>
-                    <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                      <Typography variant="caption" sx={{ color: "#bf2525", fontWeight: 800 }}>
-                        PHASE {movie.phase}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: "#6d7787" }}>
-                        {movie.year}
-                      </Typography>
-                    </Stack>
-                    <Typography variant="h6" sx={{ fontSize: "1.04rem", fontWeight: 800, lineHeight: 1.4, mb: 1, minHeight: 45 }}>
-                      {movie.title}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: "#647184", lineHeight: 1.7, minHeight: 72 }}>
-                      {movie.description}
-                    </Typography>
-                    <Box sx={{ borderTop: "1px solid #edf0f3", mt: 2, pt: 1.5 }}>
-                      {typeof movie.rating === "number" ? (
-                        <Stack direction="row" spacing={0.4} sx={{ alignItems: "center" }}>
-                          <StarRoundedIcon sx={{ fontSize: 18, color: "#e1a200" }} />
-                          <Typography variant="body2" sx={{ fontWeight: 800 }}>{movie.rating.toFixed(1)} / 5</Typography>
-                        </Stack>
-                      ) : (
-                        <Typography variant="caption" sx={{ color: "#8993a1" }}>評価：{movie.rating || "未登録"}</Typography>
-                      )}
-                      {/* 全作品一覧では従来通りレビューをカード内に表示。
-                          1作品選択時は右の専用カードに表示するため重複させない。 */}
-                      {/* {!selectedMovieId && movie.review && (
-                        <Typography variant="body2" sx={{ mt: 1, color: "#4d5969" }}>
-                          {movie.review}
-                        </Typography>
-                      )} */}
-                    </Box>
-                  </CardContent>
-                  </CardActionArea>
-                </Card>
-              ))}
-
-              {/* 1作品だけ選択された場合、映画カードの右側にレビュー本文を表示 */}
-              {selectedMovie && filteredMovies.length === 1 && (
-                <Card
-                  variant="outlined"
-                  sx={{
-                    minWidth: 0,
-                    borderRadius: 2.5,
-                    borderColor: "#e0e4eb",
-                    boxShadow: "none",
-                    bgcolor: "#fff",
-                  }}
-                >
-                  <CardContent sx={{ p: { xs: 2.5, md: 3 }, "&:last-child": { pb: { xs: 2.5, md: 3 } } }}>
-                    <Typography variant="overline" sx={{ color: "#bf2525", fontWeight: 800, letterSpacing: 1.5 }}>
-                      MOVIE REVIEW
-                    </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 800, mt: 1, mb: 2 }}>
-                      {selectedMovie.title} のレビュー
-                    </Typography>
-                    <Box sx={{ borderTop: "1px solid #edf0f3", pt: 2 }}>
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          whiteSpace: "pre-wrap", // movie.review に書いた改行をそのまま表示
-                          overflowWrap: "anywhere",
-                          color: selectedMovie.review?.trim() ? "#344054" : "#8993a1",
-                          lineHeight: 1.9,
-                        }}
-                      >
-                        {selectedMovie.review?.trim() || "レビューはまだ登録されていません。"}
-                      </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
+                  sx={{ width: { xs: "100%", sm: 290 }, "& .MuiOutlinedInput-root": { color: "#e8ecf5", bgcolor: "#151a24", borderRadius: 1.4, fontSize: 12.5, height: 45, "& fieldset": { borderColor: "#333a49" }, "&:hover fieldset": { borderColor: "#6d5160" }, "&.Mui-focused fieldset": { borderColor: "#e95b66" } }, "& input::placeholder": { color: "#80899b", opacity: 1 } }}
+                />
               )}
             </Box>
 
+            {/* 全作品モードのみフェーズ絞り込みを表示 */}
+            {!selectedMovie && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 3, pb: 2.7, borderBottom: "1px solid #282c37" }}>
+                {([
+                  { key: "all" as const, label: "ALL PHASES" },
+                  { key: 1 as const, label: "PHASE 01" },
+                  { key: 2 as const, label: "PHASE 02" },
+                  { key: 3 as const, label: "PHASE 03" },
+                ]).map((filter) => {
+                  const active = phaseFilter === filter.key;
+                  return (
+                    <Button
+                      key={filter.key}
+                      onClick={() => selectPhase(filter.key)}
+                      size="small"
+                      sx={{
+                        px: 1.8, py: 0.9, borderRadius: 1, textTransform: "none", fontSize: 10.5,
+                        fontWeight: 900, letterSpacing: 1.1,
+                        border: "1px solid", borderColor: active ? "#ce4c57" : "#353b49",
+                        bgcolor: active ? "rgba(208,63,78,.15)" : "transparent",
+                        color: active ? "#ff8a93" : "#a8b2c2",
+                        "&:hover": { bgcolor: "rgba(208,63,78,.15)", borderColor: "#ce4c57" },
+                      }}
+                    >
+                      {filter.label}
+                    </Button>
+                  );
+                })}
+                <Typography sx={{ ml: "auto", fontSize: 11, color: "#778294", letterSpacing: 0.5 }}>
+                  RELEASE ORDER <ArrowForwardRoundedIcon sx={{ fontSize: 13, verticalAlign: "middle", ml: 0.4 }} />
+                </Typography>
+              </Box>
+            )}
+            {/* 未選択: ポスター一覧 / 選択: ポスター+レビュー */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: selectedMovie
+                  ? { xs: "minmax(0,1fr)", lg: "minmax(260px, .83fr) minmax(0, 1.17fr)" }
+                  : { xs: "minmax(0,1fr)", sm: "repeat(2,minmax(0,1fr))", xl: "repeat(3,minmax(0,1fr))" },
+                gap: { xs: 2.2, md: 2.7 },
+                alignItems: "start",
+              }}
+            >
+              {filteredMovies.map((movie) => (
+                <MovieCard key={movie.id} movie={movie} onSelect={() => selectMovie(movie.id)} />
+              ))}
+              {selectedMovie && filteredMovies.length === 1 && <ReviewPanel movie={selectedMovie} />}
+            </Box>
+
             {filteredMovies.length === 0 && (
-              <Box sx={{ py: 10, textAlign: "center", color: "#687384" }}>
-                <Typography variant="h6">該当する作品が見つかりませんでした。</Typography>
-                <Button onClick={showAllMovies} sx={{ mt: 2 }}>全作品に戻る</Button>
+              <Box sx={{ border: "1px dashed #3a4352", borderRadius: 2, p: 6, textAlign: "center", bgcolor: "#111620" }}>
+                <SearchRoundedIcon sx={{ fontSize: 42, color: "#657083", mb: 1 }} />
+                <Typography sx={{ fontWeight: 800, mb: 1 }}>該当する作品が見つかりませんでした</Typography>
+                <Typography sx={{ color: muted, fontSize: 13, mb: 2 }}>別のキーワードで検索するか、全作品に戻ってください。</Typography>
+                <Button onClick={showAllMovies} sx={{ color: "#ff858c", textTransform: "none" }}>すべて表示</Button>
               </Box>
             )}
           </Box>
+        </Box>
+        <Box component="footer" sx={{ borderTop: "1px solid #262c36", mt: 9, pt: 3.2, display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
+          <Typography sx={{ fontSize: 10, letterSpacing: 2, fontWeight: 850, color: "#737f90" }}>THE MCU ARCHIVE / MOVIE JOURNAL</Typography>
+          <Typography sx={{ fontSize: 10, letterSpacing: 1.4, color: "#737f90" }}>23 STORIES · ONE UNIVERSE</Typography>
         </Box>
       </Box>
     </Box>
