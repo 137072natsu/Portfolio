@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type SyntheticEvent } from "react";
 import {
   Box,
   Button,
@@ -353,9 +353,12 @@ export default function Page() {
               aria-label="マーベル作品の公開履歴"
               defaultExpandedItems={initialExpandedItems}
               // 親の「フェーズ」「年」は展開だけ、作品を選ぶとカードを絞り込む。
-              selectedItems={selectedMovieId ? `movie-${selectedMovieId}` : ""}
-              onSelectedItemsChange={(_: any, itemIds: string) => {
-                if (typeof itemIds === "string" && itemIds.startsWith("movie-")) {
+              selectedItems={selectedMovieId ? `movie-${selectedMovieId}` : null}
+              onSelectedItemsChange={(
+                 _event: SyntheticEvent<Element, Event> | null,
+                 itemIds: string | null
+              ) => {
+                if (itemIds?.startsWith("movie-")) {
                   selectMovie(itemIds.slice("movie-".length));
                 }
               }}
