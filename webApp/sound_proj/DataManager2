@@ -1,0 +1,52 @@
+
+#pragma once
+
+#include <cri_xpt.h>
+#include <cri_atom_ex.h>
+#include <cri_atom_pc.h>
+
+#include <filesystem>
+
+class DataManager
+{
+public:
+    DataManager() = default;
+    virtual ~DataManager();
+
+    // ハンドルの二重解放を防ぐ
+    DataManager(const DataManager&) = delete;
+    DataManager& operator=(const DataManager&) = delete;
+
+protected:
+    // CRI ADX初期化・ACF登録
+    bool Initialize(const std::filesystem::path& acf);
+
+    // ACB・AWBの読み込み
+    bool LoadAcb(
+        const std::filesystem::path& acb,
+        const std::filesystem::path& awb = {});
+
+    // ACBの解放
+    void ReleaseAcb();
+
+    // 再生関連リソースの解放
+    void ReleasePlaybackResources();
+
+    // CRI ADXライブラリ終了
+    void FinalizeLibrary();
+
+    // PCMスレッドが存在しないときに使用
+    void Shutdown();
+
+    // 子クラスから利用するハンドル
+    CriAtomExPlayerHn player_ = nullptr;
+    CriAtomExVoicePoolHn voice_pool_ = nullptr;
+    CriAtomExAcbHn acb_hn_ = nullptr;
+
+private:
+    bool initialized_ = false;
+    bool acf_registered_ = false;
+
+    CriAtomDbasId dbas_id_ =
+        CRIATOMDBAS_ILLEGAL_ID;
+};
