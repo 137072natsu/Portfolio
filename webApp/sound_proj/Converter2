@@ -1,0 +1,202 @@
+
+#include "DataConverter.h"
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <fstream>
+
+using json = nlohmann::json;
+using namespace std::chrono_literals;
+
+DataConverter::~DataConverter()
+{
+    Cleanup();
+}
+
+// PCMを取得しながら特徴量を集計
+void DataConverter::PcmLoop()
+{
+    float left[FramesPerPull]{};
+    float right[FramesPerPull]{};
+
+    CriFloat32* buffers[2] = { left, right };
+
+    while (running_.load())
+    {
+        const CriSint32 n =
+            criAtomExAsr_GetPcmDataFloat32(
+                Channels, FramesPerPull, buffers);
+
+        if (n > 0)
+        {
+            std::lock_guard lock(mutex_);
+
+            if (capturing_)
+            {
+                for (int i = 0; i < n; ++i)
+                {
+                    const double l = left[i];
+                    const double r = right[i];
+
+                    features_.sumSq += l*l + r*r;
+                    features_.peak = std::max(
+                        features_.peak,
+                        std::max(std::abs(l), std::abs(r)));
+
+                    features_.sampleCount += 2;
+                }
+            }
+        }
+
+        std::this_thread::sleep_for(8ms);
+    }
+}
+
+// ACB内のCueを順番に解析
+bool DataConverter::Convert(
+    const std::filesystem::path& acf,
+    const std::filesystem::path& acb,
+    const std::filesystem::path& awb,
+    const std::filesystem::path& outputJson)
+{
+    if (!Initialize(acf))
+        return false;
+
+    running_ = true;
+    pcmThread_ = std::thread(
+        &DataConverter::PcmLoop, this);
+
+    bool success = false;
+
+    try
+    {
+        if (LoadAcb(acb, awb))
+        {
+            json results = json::array();
+
+            const int count =
+                criAtomExAcb_GetNumCues(acb_hn_);
+
+            for (int i = 0; i < count; ++i)
+            {
+                CriAtomExCueInfo info{};
+
+                if (criAtomExAcb_GetCueInfoByIndex(
+                    acb_hn_, i, &info) != CRI_TRUE)
+                    continue;
+
+                // 前のCueのPCMを排出
+                while (criAtomExAsr_GetNumBufferedSamples() > 0)
+                    std::this_thread::sleep_for(5ms);
+
+                // 集計をリセット
+                {
+                    std::lock_guard lock(mutex_);
+                    features_ = {};
+                    capturing_ = true;
+                }
+
+                // Cueを再生
+                criAtomExPlayer_SetCueId(
+                    player_, acb_hn_, info.id);
+
+                const auto playId =
+                    criAtomExPlayer_Start(player_);
+
+                bool completed = false;
+
+                if (playId != CRIATOMEX_INVALID_PLAYBACK_ID)
+                {
+                    const auto start =
+                        std::chrono::steady_clock::now();
+
+                    // 無限ループ防止：最大12秒
+                    while (std::chrono::steady_clock::now()
+                           - start < 12s)
+                    {
+                        criAtomEx_ExecuteMain();
+
+                        const auto status =
+                            criAtomExPlayer_GetStatus(player_);
+
+                        if (status == CRIATOMEXPLAYER_STATUS_PLAYEND)
+                        {
+                            completed = true;
+                            break;
+                        }
+
+                        if (status == CRIATOMEXPLAYER_STATUS_ERROR)
+                            break;
+
+                        std::this_thread::sleep_for(10ms);
+                    }
+                }
+
+                // 再生終了後の残りのPCMを取得
+                for (int j = 0; j < 50 &&
+                     criAtomExAsr_GetNumBufferedSamples() > 0; ++j)
+                {
+                    std::this_thread::sleep_for(10ms);
+                }
+
+                Features result;
+                {
+                    std::lock_guard lock(mutex_);
+                    capturing_ = false;
+                    result = features_;
+                }
+
+                criAtomExPlayer_Stop(player_);
+
+                const double rms =
+                    result.sampleCount > 0
+                    ? std::sqrt(
+                        result.sumSq / result.sampleCount)
+                    : 0.0;
+
+                results.push_back({
+                    {"cue_id", info.id},
+                    {"cue_name", info.name ? info.name : ""},
+                    {"rms", rms},
+                    {"peak", result.peak},
+                    {"duration",
+                        static_cast<double>(result.sampleCount)
+                        / (SampleRate * Channels)},
+                    {"completed", completed}
+                });
+            }
+
+            std::ofstream file(outputJson);
+            if (file)
+            {
+                file << results.dump(
+                    2, ' ', false,
+                    json::error_handler_t::replace);
+                file.flush();
+                success = file.good();
+            }
+        }
+    }
+    catch (...)
+    {
+        success = false;
+    }
+
+    Cleanup();
+    return success;
+}
+
+void DataConverter::Cleanup()
+{
+    // PCM取得スレッドを動かしたままリソースを解放
+    ReleasePlaybackResources();
+
+    running_ = false;
+
+    if (pcmThread_.joinable())
+        pcmThread_.join();
+
+    FinalizeLibrary();
+}
