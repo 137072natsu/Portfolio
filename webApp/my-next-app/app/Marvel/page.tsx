@@ -24,7 +24,7 @@ import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
 import { TreeItem } from "@mui/x-tree-view/TreeItem";
 
 
-type Phase = 1 | 2 | 3;
+type Phase = 1 | 2 | 3 | 4 | 5;
 type PhaseFilter = Phase | "all";
 
 type Movie = {
@@ -283,13 +283,55 @@ const movies: Movie[] = [
     thumbnail: "/images/marvel/far-from-home.jpg",
     rating: 4.6
   },
+  {
+    id: "wanda-vision", title: "ワンダヴィジョン", year: 2021, phase: 4,
+    description: "ワンダとヴィジョンの結婚生活を描いたドラマシリーズ。",
+    thumbnail: "/images/marvel/wanda-vision.jpg",
+    rating: 3.6,
+    review: `MCU史上初のドラマシリーズとなる。
+    
+    これまでの映画作品とは異なり、コメディタッチで描かれているので異色な作品となっている。
+    エンドゲームまで見る人は多いと思うんだけど、この辺から追いつけなくなってしまった人は多いんじゃないかと思う。どうしてもドラマっていう形態で時間がないだとか、展開が遅いだとかっていうのは避けられない問題としてあるからなんだよな。マーベルの方針なのか、ディズニーの方針なのかドラマ展開を増やしていこうって指針はこっから実験的に始まったわけだけど、実際ドラマまで追えねーすわって人はまあ多いよね。
+    実際自分もそうで、フェーズを追うに伴ってドラマは後回しにした口。じゃあ見なくてもいいのか？ディズニープラスでしかやっていないし、そんなに面白くないのか？MCUは映画だけでオーケーなの？
+    勿論、答えはノー。このドラマ、かなり面白いです。まず、MCUのキャラクターって映画でしか触れることができないじゃないですか。映画ってせいぜい120分とかそこらなので、そんな短い時間で全てのキャラクターを理解しつくすなんてまず無理なんだよね。だから、アベンジャーズだけに出てきたキャラってのはどうしても解像度が浅いままになってエンドゲームを迎えてしまっていると思う。
+    ワンダとヴィジョンなんてその最たるもので。なんかこう、ドラマなんで当然長いは長いんだけど、ここまでMCUを追ってきた人には、ワンダとかヴィジョンとかそういう馴染みのキャラクターの見たことない側面に触れられるのって凄く贅沢なことなんじゃないかな、と思うんだよな。
+    なんかいつの間にかワンダとビジョンはセットになっていたし、僕らはその関係性を勝手に想像力で補填して飲み込んできたけど、そういう経緯もしっかりと拾ってくれるし流石MCUって感じなわけよ。だから、この作品はエンドゲームが終わって一区切りついたからこそできる作品であり、MCUファンにとってのご褒美といっても過言ではない。
+    
+    長々と話したけど、この作品はMCUを追ってきた人にとっては必見の作品になっている。MCUに与える影響もかなり大きいので、ぶっちゃけ見ていないと先の作品でわからない箇所も多くなってくる。
+    ちな話は、中盤からどんどん展開が動き出して盛り上がり方も綺麗なので、見て後悔はないと思います。
+    
+    予習作品: エンドゲーム (以降、エンドゲームは省略する)
+    視聴するべきか: 必須`,
+  },
+  {
+    id: "falcon&winter-soldier", title: "ファルコン＆ウィンターソルジャー", year: 2021, phase: 4,
+    description: "ファルコンとウィンターソルジャーが協力し、新たな脅威と戦う。",
+    thumbnail: "/images/marvel/falcon&winter-soldier.jpg",
+    rating: 3.8,
+  },
+  {
+    id: "loki", title: "ロキ", year: 2021, phase: 4,
+    description: "ロキが主人公となり、アベンジャーズ/エンドゲーム後の物語を描く新シリーズ。",
+    thumbnail: "/images/marvel/loki.jpg",
+    rating: 4.1,
+    review: `こちらも続けてドラマシリーズ。神ドラマ`
+  },
+  {
+    id: "black-widow", title: "ブラックウィドウ", year: 2021, phase: 4,
+    description: "ブラックウィドウが過去の秘密と向き合う。",
+    thumbnail: "/images/marvel/black-widow.jpg",
+    rating: 4.1,
+    review: `ナターシャが好きなんよ、、`
+  }
 ];
 
-const phases: Phase[] = [1, 2, 3];
+const phases: Phase[] = [1, 2, 3, 4, 5];
 const phaseColors: Record<Phase, string> = {
   1: "#f05a5b",
   2: "#e7b36c",
   3: "#b7a0f2",
+  4: "#5fc9f8",
+  5: "#5ff05a",
 };
 const background = "#080a10";
 const panel = "#10141d";
@@ -301,6 +343,8 @@ const yearsByPhase: Record<Phase, number[]> = {
   1: [...new Set(movies.filter((m) => m.phase === 1).map((m) => m.year))],
   2: [...new Set(movies.filter((m) => m.phase === 2).map((m) => m.year))],
   3: [...new Set(movies.filter((m) => m.phase === 3).map((m) => m.year))],
+  4: [...new Set(movies.filter((m) => m.phase === 4).map((m) => m.year))],
+  5: [...new Set(movies.filter((m) => m.phase === 5).map((m) => m.year))]
 };
 const initialExpandedItems = phases.flatMap((phase) => [
   `phase-${phase}`,
