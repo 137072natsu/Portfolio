@@ -1,0 +1,14 @@
+// <プロジェクト名>.Build.cs の PublicDependencyModuleNames に UMG が必要。
+// 既存のBuild.csに、"UMG" を追加するだけでもよい。
+
+PublicDependencyModuleNames.AddRange(new string[]
+{
+    "Core",
+    "CoreUObject",
+    "Engine",
+    "InputCore",
+    "UMG"
+});
+
+// この実装は UMG のAPIのみを直接使用するため、
+// Slate / SlateCore の追加は原則不要。
